@@ -1,4 +1,3 @@
-````markdown
 # Storage Microservice
 
 This microservice provides file storage capabilities using MinIO (S3-compatible) and presigned URLs for uploads and downloads.
