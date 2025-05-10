@@ -1,13 +1,13 @@
 # Storage Microservice
 
-This microservice provides file storage capabilities using MinIO (S3-compatible) and presigned URLs for uploads and downloads.
+This microservice handles file storage using MinIO (S3-compatible) and creates URLs for uploads and downloads.
 
 ## Features
 
-- Upload files (PNG, JPEG, PDF, plain text) via multipart/form-data.
-- Enforce file type and size restrictions (max 10 MB).
-- Generate presigned download URLs valid for configurable duration (default: 60 minutes).
-- MinIO (S3) integration with path-style access.
+- Upload files (PNG, JPEG, PDF, text) using multipart/form-data
+- File type and size limits (max 10 MB)
+- Create download URLs that expire (default: 60 minutes)
+- MinIO (S3) integration
 
 ## Prerequisites
 
@@ -32,7 +32,7 @@ aws.region=us-east-1
 
 # HTTP server port
 server.port=8090
-````
+```
 
 ## Building and Running
 
@@ -42,7 +42,7 @@ server.port=8090
 # Build
 mvn clean install
 
-# Run (via plugin)
+# Run 
 mvn spring-boot:run
 
 # Or run the packaged JAR
@@ -51,6 +51,8 @@ java -jar target/storage-service-0.0.1-SNAPSHOT.jar
 ```
 
 ## Endpoints
+
+All endpoints are accessible through the API Gateway at `http://localhost:8090/storage/**`.
 
 ### POST /storage/upload
 
@@ -81,155 +83,11 @@ curl -i -X POST http://localhost:8090/storage/upload \
 **Example**:
 
 ```bash
-curl -i http://localhost:8090/storage/download/123e4567-e89b-12d3-a456-426614174000_myfile.pdf
+curl -i http://localhost:8090/storage/download/{file_name}
 ```
-
-## Project Structure
-
-```
-src/
-├── main/
-│   ├── java/com/example/storage_service
-│   │   ├── StorageServiceApplication.java
-│   │   ├── controller/StorageController.java
-│   │   ├── service/StorageService.java
-│   │   └── config/MinioConfig.java
-│   └── resources/application.properties
-└── test/...
-```
-
-## Integration Testing
-
-Use Postman to verify the storage microservice within your DMS workflow (Auth and Dept services assumed running):
-
-1. **Register three accounts**
-
-   * **Request**: `POST {{authBaseUrl}}/auth/register`
-   * **Headers**: `Content-Type: application/json`
-   * **Body (raw JSON)**:
-
-     ```json
-     { "email":"alice@dms.com", "password":"pass", "roles":["ROLE_USER"] }
-     ```
-   * Repeat for `bob@dms.com` (ROLE\_USER) and `admin@dms.com` (ROLE\_ADMIN).
-
-2. **Log in and capture tokens**
-
-   * **Request**: `POST {{authBaseUrl}}/auth/login`
-   * **Headers**: `Content-Type: application/json`
-   * **Body (raw JSON)**:
-
-     ```json
-     { "email":"alice@dms.com", "password":"pass" }
-     ```
-   * Copy the `token` field from the response into Postman environment variable `aliceToken`. Repeat for `bobToken` and `adminToken`.
-
-3. **Create a Department**
-
-   * **Request**: `POST {{deptBaseUrl}}/departments`
-   * **Headers**:
-
-     * `Authorization: Bearer {{adminToken}}`
-     * `Content-Type: application/json`
-   * **Body (raw JSON)**:
-
-     ```json
-     { "name":"HR" }
-     ```
-   * Save the returned `id` as `deptId`.
-
-4. **Create a Category**
-
-   * **Request**: `POST {{deptBaseUrl}}/categories`
-   * **Headers**:
-
-     * `Authorization: Bearer {{adminToken}}`
-     * `Content-Type: application/json`
-   * **Body (raw JSON)**:
-
-     ```json
-     { "name":"Policies" }
-     ```
-   * Save the returned `id` as `catId`.
-
-5. **Assign Alice to HR**
-
-   * **Request**: `POST {{deptBaseUrl}}/departments/{{deptId}}/users?email=alice@dms.com`
-   * **Headers**: `Authorization: Bearer {{adminToken}}`
-
-6. **Upload a file to Storage**
-
-   * **Request**: `POST {{storageUrl}}/storage/upload`
-   * **Body (form-data)**:
-
-     * Key: `file`
-     * Value: select any small text or PDF file
-   * **Note**: no auth header required
-   * Save the response field `key` into environment variable `fileKey`.
-
-7. **Create a Document in Docs service**
-
-   * **Request**: `POST {{deptBaseUrl}}/documents`
-   * **Headers**:
-
-     * `Authorization: Bearer {{aliceToken}}`
-     * `Content-Type: multipart/form-data`
-   * **Body (form-data)**:
-
-     * `file`: choose the same file you uploaded
-     * `metadata` (Text, Content-Type `application/json`):
-
-       ```json
-       {
-         "title":"Policy1",
-         "categoryId":"{{catId}}",
-         "departmentId":"{{deptId}}",
-         "userEmail":"alice@dms.com"
-       }
-       ```
-   * Save the returned `id` into `docId`.
-
-8. **List Alice’s documents**
-
-   * **Request**: `GET {{deptBaseUrl}}/documents/user/alice%40dms.com`
-   * **Headers**: `Authorization: Bearer {{aliceToken}}`
-   * **Expect**: JSON array containing your new document.
-
-9. **List Bob’s documents (should be empty)**
-
-   * **Request**: `GET {{deptBaseUrl}}/documents/user/bob%40dms.com`
-   * **Headers**: `Authorization: Bearer {{bobToken}}`
-   * **Expect**: `[]`.
-
-10. **Fetch Alice’s metadata by ID**
-
-* **Request**: `GET {{deptBaseUrl}}/documents/{{docId}}`
-* **Headers**: `Authorization: Bearer {{aliceToken}}`
-* **Expect**: single `DocumentDto` JSON.
-
-11. **Bob tries to fetch Alice’s by ID (404)**
-
-* **Request**: `GET {{deptBaseUrl}}/documents/{{docId}}`
-* **Headers**: `Authorization: Bearer {{bobToken}}`
-* **Expect**: `404 Not Found`.
-
-12. **Download redirect endpoint**
-
-* **Request**: `GET {{deptBaseUrl}}/documents/{{docId}}/download`
-* **Headers**: `Authorization: Bearer {{aliceToken}}`
-* **Expect**: `302 Found` with `Location` header pointing to presigned URL. Follow redirect or copy URL into a new GET to verify file contents.
-
-13. **Bob tries the download redirect (404)**
-
-* **Request**: `GET {{deptBaseUrl}}/documents/{{docId}}/download`
-* **Headers**: `Authorization: Bearer {{bobToken}}`
-* **Expect**: `404 Not Found`.
 
 ## Notes
 
 * Ensure MinIO is accessible and the bucket `dms-files` exists.
 * Adjust `aws.region` to match your deployment region if using AWS S3.
 * Update CORS or security settings as needed for production.
-
-```
-```
